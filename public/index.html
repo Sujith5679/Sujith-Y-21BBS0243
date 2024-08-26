@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>5x5 Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #333; color: #fff; text-align: center; }
+        #game-board { display: grid; grid-template-columns: repeat(5, 50px); grid-gap: 5px; justify-content: center; margin-top: 20px; }
+        .cell { width: 50px; height: 50px; border: 1px solid #444; display: flex; align-items: center; justify-content: center; background-color: #555; }
+        .cell.selected { background-color: #88f; }
+        .button { margin: 10px; padding: 10px 20px; background-color: #444; color: #fff; border: none; cursor: pointer; }
+        .button:hover { background-color: #666; }
+    </style>
+</head>
+<body>
+    <h1 id="current-player">Connecting...</h1>
+    <div id="game-board"></div>
+    <p id="selected-move">Selected: None</p>
+    <div id="move-buttons"></div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8080');
+        let currentPlayer = 'A';
+        let selectedCharacter = null;
+
+        
+        ws.onopen = function() {
+            console.log('Connected to server');
+            ws.send(JSON.stringify({ type: 'init', player: currentPlayer }));
+        };
+
+        ws.onmessage = function(event) {
+            const message = JSON.parse(event.data);
+            console.log('Message from server:', message);
+
+            switch (message.type) {
+                case 'gameState':
+                    console.log('Game state received:', message.state);
+                    
+                    renderBoard(message.state);
+                    break;
+                case 'invalidMove':
+                    alert('Invalid move! Try again.');
+                    break;
+                case 'gameOver':
+                    alert(`Game over! Winner: ${message.winner}`);
+                    break;
+                default:
+                    console.warn('Unknown message type:', message.type);
+            }
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket Error:', error);
+        };
+
+        ws.onclose = function() {
+            console.log('Disconnected from server');
+        };
+
+        
+        function generateBoard() {
+            const board = document.getElementById('game-board');
+            board.innerHTML = ''; 
+
+            for (let i = 0; i < 25; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.id = `cell-${i}`;
+                cell.addEventListener('click', () => selectCell(cell));
+                board.appendChild(cell);
+            }
+        }
+
+        
+        function renderBoard(state) {
+            generateBoard(); 
+
+            state.forEach((character, index) => {
+                if (character) {
+                    const cell = document.getElementById(`cell-${index}`);
+                    cell.textContent = character;
+                }
+            });
+            document.getElementById('current-player').textContent = `Current Player: ${currentPlayer}`;
+        }
+
+        
+        function selectCell(cell) {
+            if (selectedCharacter) {
+                document.getElementById(selectedCharacter).classList.remove('selected');
+            }
+            selectedCharacter = cell.id;
+            cell.classList.add('selected');
+            document.getElementById('selected-move').textContent = `Selected: ${selectedCharacter}`;
+            generateMoveButtons();
+        }
+
+        
+        function generateMoveButtons() {
+            const moveButtons = document.getElementById('move-buttons');
+            moveButtons.innerHTML = '';
+
+            const moves = ['L', 'R', 'F', 'B'];
+            moves.forEach(move => {
+                const button = document.createElement('button');
+                button.className = 'button';
+                button.textContent = move;
+                button.addEventListener('click', () => makeMove(move));
+                moveButtons.appendChild(button);
+            });
+        }
+
+        
+        function makeMove(move) {
+            if (selectedCharacter) {
+                const moveCommand = `${selectedCharacter}:${move}`;
+                console.log('Sending move:', moveCommand);
+                ws.send(JSON.stringify({ type: 'move', command: moveCommand, player: currentPlayer }));
+            } else {
+                alert('No character selected!');
+            }
+        }
+
+        
+        generateBoard();
+    </script>
+  
+</body>
+</html>
